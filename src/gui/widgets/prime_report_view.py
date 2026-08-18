@@ -215,8 +215,9 @@ class PrimeReportViewWidget(QFrame):
                 border: 1px solid {border_col};
                 border-radius: 8px;
                 padding: 14px;
-            }
+            }}
         """)
+
         layout = QVBoxLayout(card)
         layout.setSpacing(10)
 

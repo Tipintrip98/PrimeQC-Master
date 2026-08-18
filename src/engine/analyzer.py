@@ -245,3 +245,6 @@ class PrimeQCAnalyzer:
         )
 
         return report
+
+
+QCAnalyzer = PrimeQCAnalyzer

@@ -32,7 +32,7 @@ from .dialogs.utilities_dialog import UtilitiesDialog
 from ..core.config import ConfigManager
 from ..core.constants import ProfileType, PROFILES, Severity
 from ..core.i18n import I18nManager, LANGUAGES, _t
-from ..engine.analyzer import QCAnalyzer
+from ..engine.analyzer import PrimeQCAnalyzer, QCAnalyzer
 from ..engine.models import QCReportData
 from ..reports.pdf_report import PDFReportExporter
 from ..reports.json_manifest import JSONManifestExporter
@@ -54,20 +54,21 @@ class QCWorker(QThread):
 
     def run(self):
         try:
-            profile = PROFILES.get(self.profile_name, PROFILES[ProfileType.PVD_HD.value])
-            self.analyzer = QCAnalyzer(profile=profile)
+            self.analyzer = PrimeQCAnalyzer()
 
-            def progress_hook(pct, msg):
-                self.sig_progress.emit(pct, msg)
+            def progress_hook(stage, pct, msg):
+                self.sig_progress.emit(pct, f"[{stage}] {msg}")
 
-            report = self.analyzer.analyze(
-                media_path=self.media_path,
-                subtitle_path=self.subtitle_path,
-                progress_cb=progress_hook
+            report = self.analyzer.run_qc(
+                file_path=self.media_path,
+                profile_name=self.profile_name,
+                sidecar_subtitle_path=self.subtitle_path,
+                progress_callback=progress_hook
             )
             self.sig_done.emit(report)
         except Exception as e:
             self.sig_error.emit(str(e))
+
 
 
 class MainWindow(QMainWindow):
