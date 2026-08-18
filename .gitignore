@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Build outputs
+dist/
+build/
+installer/payload.zip
+*.spec
+
+# Test artifacts
+tests/output/
+
+# Large local binary downloads (FFmpeg can be downloaded via build script or imageio-ffmpeg)
+bin/*.exe
+
+# Environment & IDE
+.env
+.venv
+venv/
+ENV/
+.idea/
+.vscode/
+*.swp
+*.bak
