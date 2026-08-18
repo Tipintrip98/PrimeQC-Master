@@ -9,10 +9,13 @@ build/
 installer/payload.zip
 *.spec
 
-# Test artifacts
+# Test artifacts & heavy media files
 tests/output/
+tests/media/*.mov
+tests/media/*.mp4
+tests/media/*.mxf
 
-# Large local binary downloads (FFmpeg can be downloaded via build script or imageio-ffmpeg)
+# Large local binary downloads
 bin/*.exe
 
 # Environment & IDE
