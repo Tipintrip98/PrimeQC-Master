@@ -77,3 +77,6 @@ class AppConfig:
         merged = {k.value: v for k, v in PRIME_PROFILES.items()}
         merged.update(self.custom_profiles)
         return merged
+
+
+ConfigManager = AppConfig

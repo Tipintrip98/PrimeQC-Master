@@ -2,6 +2,7 @@
 Amazon Prime Video Style Interactive QC Report Viewer.
 Presents issues and compliance reports formatted in official Amazon Prime Delivery style,
 explaining clearly why files fail and providing step-by-step NLE / FFmpeg fixes.
+Supports dynamic multi-language localization (i18n).
 """
 
 import os
@@ -13,6 +14,7 @@ from PySide6.QtCore import Qt
 from ...engine.models import QCReportData, QCIssue
 from ...core.constants import Severity, StreamType
 from ...core.utils import format_bytes, seconds_to_timecode
+from ...core.i18n import _t
 
 
 class PrimeReportViewWidget(QFrame):
@@ -62,11 +64,11 @@ class PrimeReportViewWidget(QFrame):
         lbl_icon.setStyleSheet("font-size: 40px; background: transparent;")
         lbl_icon.setAlignment(Qt.AlignCenter)
 
-        lbl_title = QLabel("<b>NESSUN REPORT QC GENERATO</b>")
+        lbl_title = QLabel(f"<b>{_t('tab_prime_report').upper()}</b>")
         lbl_title.setStyleSheet("font-size: 15px; color: #94a3b8; background: transparent;")
         lbl_title.setAlignment(Qt.AlignCenter)
 
-        lbl_desc = QLabel("Carica un master video e premi <b>'START QC INSPECTION'</b> per visualizzare il report ufficiale in stile Amazon Prime Video.")
+        lbl_desc = QLabel(_t("drop_prompt"))
         lbl_desc.setStyleSheet("color: #64748b; font-size: 12px; background: transparent;")
         lbl_desc.setAlignment(Qt.AlignCenter)
 
@@ -103,7 +105,7 @@ class PrimeReportViewWidget(QFrame):
         title_row.addWidget(lbl_qc_title)
         title_row.addStretch()
 
-        lbl_date = QLabel(f"Data: {report.generated_at}")
+        lbl_date = QLabel(f"{report.generated_at}")
         lbl_date.setStyleSheet("color: #94a3b8; font-size: 11px;")
         title_row.addWidget(lbl_date)
 
@@ -116,18 +118,18 @@ class PrimeReportViewWidget(QFrame):
 
         if report.verdict == Severity.PASS:
             badge_frame.setStyleSheet("background-color: #064e3b; border: 1px solid #059669; border-radius: 6px;")
-            lbl_badge = QLabel("<b>✓ ESITO: APPROVATO (ACCEPTED) - CONFORME PER LA DISTRIBUZIONE SU AMAZON PRIME</b>")
+            lbl_badge = QLabel(f"<b>✓ {_t('verdict_pass')}</b>")
             lbl_badge.setStyleSheet("color: #34d399; font-size: 13px;")
         elif report.verdict == Severity.WARNING:
             badge_frame.setStyleSheet("background-color: #451a03; border: 1px solid #d97706; border-radius: 6px;")
-            lbl_badge = QLabel(f"<b>⚠️ ESITO: REVISIONE CONSIGLIATA (WARNING) - {report.warning_count} AVVISI RILEVATI</b>")
+            lbl_badge = QLabel(f"<b>⚠️ {_t('verdict_warn')}</b>")
             lbl_badge.setStyleSheet("color: #fbbf24; font-size: 13px;")
         else:
             badge_frame.setStyleSheet("background-color: #450a0a; border: 1px solid #dc2626; border-radius: 6px;")
-            lbl_badge = QLabel(f"<b>❌ ESITO: RIGETTATO (REJECTED) - {report.fail_count} ERRORI CRITICI BLOCCANTI</b>")
+            lbl_badge = QLabel(f"<b>❌ {_t('verdict_fail')} ({report.fail_count})</b>")
             lbl_badge.setStyleSheet("color: #f87171; font-size: 13px;")
 
-        lbl_score = QLabel(f"<b>Punteggio Conformità: {report.compliance_score:.1f}%</b>")
+        lbl_score = QLabel(f"<b>{_t('score_label')}: {report.compliance_score:.1f}%</b>")
         lbl_score.setStyleSheet("color: #ffffff; font-size: 13px;")
 
         b_layout.addWidget(lbl_badge)
@@ -149,12 +151,12 @@ class PrimeReportViewWidget(QFrame):
         <table style='width: 100%; border-collapse: collapse; font-size: 11px; color: #cbd5e1;'>
             <tr>
                 <td style='padding: 3px 0;'><b>File:</b> {report.file_name}</td>
-                <td style='padding: 3px 0;'><b>Dimensione:</b> {format_bytes(report.file_size_bytes)}</td>
-                <td style='padding: 3px 0;'><b>Durata:</b> {report.duration_sec:.2f}s ({seconds_to_timecode(report.duration_sec, fps)})</td>
+                <td style='padding: 3px 0;'><b>Size:</b> {format_bytes(report.file_size_bytes)}</td>
+                <td style='padding: 3px 0;'><b>Duration:</b> {report.duration_sec:.2f}s ({seconds_to_timecode(report.duration_sec, fps)})</td>
             </tr>
             <tr>
                 <td style='padding: 3px 0;'><b>Video:</b> {v_codec} | {v_res} @ {fps:.3f} fps</td>
-                <td style='padding: 3px 0;'><b>Audio:</b> {a_channels} Canali (48 kHz)</td>
+                <td style='padding: 3px 0;'><b>Audio:</b> {a_channels} Channels (48 kHz)</td>
                 <td style='padding: 3px 0;'><b>Loudness:</b> {loud_i} (TP: {true_p})</td>
             </tr>
         </table>
@@ -169,7 +171,7 @@ class PrimeReportViewWidget(QFrame):
         failed_or_warn = [i for i in report.issues if i.severity in [Severity.FAIL, Severity.WARNING]]
 
         if failed_or_warn:
-            lbl_sec_title = QLabel("<b>🚨 ANALISI DETTAGLIATA DEGLI ERRORI E GUIDA ALLA RISOLUZIONE:</b>")
+            lbl_sec_title = QLabel("<b>🚨 DETAILED ISSUES BREAKDOWN & RESOLUTION GUIDELINES:</b>")
             lbl_sec_title.setStyleSheet("color: #f87171; font-size: 13px; margin-top: 6px;")
             self.content_layout.addWidget(lbl_sec_title)
 
@@ -183,13 +185,13 @@ class PrimeReportViewWidget(QFrame):
             p_layout = QVBoxLayout(pass_card)
             p_layout.setSpacing(10)
 
-            lbl_p_title = QLabel("<b>🎉 MASTER PERFETTO: 100% CONFORME AGLI STANDARD AMAZON PRIME VIDEO</b>")
+            lbl_p_title = QLabel("<b>🎉 100% COMPLIANT MASTER - READY FOR AMAZON PRIME VIDEO PUBLISHING</b>")
             lbl_p_title.setStyleSheet("color: #34d399; font-size: 14px;")
 
             lbl_p_desc = QLabel(
-                "Tutti i 16+ parametri di controllo (Codec ProRes/AVC, Scansione progressiva, Frame rate CFR, "
-                "Loudness -24.0 LKFS, True Peak <= -2.0 dBTP, Mappatura canali discrete, Spazio colore Rec.709, "
-                "Assenza di barre/slate e allineamento durate A/V) sono pienamente conformi alle specifiche ufficiali di Amazon Prime Video."
+                "All checkpoints (Codec ProRes/AVC, Progressive Scan, Constant Frame Rate CFR, "
+                "Integrated Loudness -24.0 LKFS, True Peak <= -2.0 dBTP, Discrete Channel Mapping, Rec.709 Color Space, "
+                "No Bars/Slates and A/V duration sync) are fully compliant with Amazon Prime Video specifications."
             )
             lbl_p_desc.setWordWrap(True)
             lbl_p_desc.setStyleSheet("color: #e2e8f0; font-size: 12px; line-height: 1.5;")
@@ -220,10 +222,10 @@ class PrimeReportViewWidget(QFrame):
 
         # Header Row
         h_row = QHBoxLayout()
-        badge_text = "❌ ERRORE BLOCCANTE (RIGETTO)" if is_fail else "⚠️ AVVISO DI CONFORMITÀ"
+        badge_text = "❌ BLOCKING ERROR (REJECTED)" if is_fail else "⚠️ COMPLIANCE WARNING"
         badge_col = "#f87171" if is_fail else "#fbbf24"
 
-        lbl_id = QLabel(f"<b>#{num} | CODICE: {issue.id} - {issue.parameter}</b>")
+        lbl_id = QLabel(f"<b>#{num} | CODE: {issue.id} - {issue.parameter}</b>")
         lbl_id.setStyleSheet(f"font-size: 13px; font-weight: bold; color: #ffffff;")
 
         lbl_badge = QLabel(f"<b>{badge_text}</b>")
@@ -235,15 +237,15 @@ class PrimeReportViewWidget(QFrame):
         layout.addLayout(h_row)
 
         # Values Grid
-        tc_str = f" al timecode <b>{issue.timecode}</b>" if issue.timecode and issue.timecode != "00:00:00:00" else ""
+        tc_str = f" @ Timecode: <b>{issue.timecode}</b>" if issue.timecode and issue.timecode != "00:00:00:00" else ""
         val_html = f"""
         <table style='width: 100%; border-collapse: collapse; font-size: 11px; background: #0d1527; padding: 6px; border-radius: 4px;'>
             <tr>
-                <td style='color: #94a3b8; width: 130px; padding: 4px;'><b>Valore Rilevato:</b></td>
+                <td style='color: #94a3b8; width: 130px; padding: 4px;'><b>Measured Value:</b></td>
                 <td style='color: {badge_col}; padding: 4px;'><b>{issue.measured_value}</b>{tc_str}</td>
             </tr>
             <tr>
-                <td style='color: #94a3b8; padding: 4px;'><b>Specifiche Amazon:</b></td>
+                <td style='color: #94a3b8; padding: 4px;'><b>Amazon Spec:</b></td>
                 <td style='color: #34d399; padding: 4px;'><b>{issue.expected_value}</b></td>
             </tr>
         </table>
@@ -253,7 +255,7 @@ class PrimeReportViewWidget(QFrame):
         layout.addWidget(lbl_vals)
 
         # Why Amazon Rejects it
-        lbl_why_title = QLabel("<b>❓ Perché Amazon Prime rigetta questo file:</b>")
+        lbl_why_title = QLabel(f"<b>{_t('why_reject_title')}</b>")
         lbl_why_title.setStyleSheet("color: #38bdf8; font-size: 11px; margin-top: 4px;")
         lbl_why_desc = QLabel(issue.description)
         lbl_why_desc.setWordWrap(True)
@@ -262,7 +264,7 @@ class PrimeReportViewWidget(QFrame):
         layout.addWidget(lbl_why_desc)
 
         # How to Fix it for QC Pass
-        lbl_fix_title = QLabel("<b>🔧 Come correggerlo per passare il QC al 100%:</b>")
+        lbl_fix_title = QLabel(f"<b>{_t('how_fix_title')}</b>")
         lbl_fix_title.setStyleSheet("color: #34d399; font-size: 11px; margin-top: 4px;")
         lbl_fix_desc = QLabel(issue.remediation_tip)
         lbl_fix_desc.setWordWrap(True)

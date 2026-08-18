@@ -269,3 +269,6 @@ PRIME_PROFILES: Dict[str, Dict[str, Any]] = {
         "pse_flash_limit_hz": 3.0
     }
 }
+
+PROFILES = PRIME_PROFILES
+
