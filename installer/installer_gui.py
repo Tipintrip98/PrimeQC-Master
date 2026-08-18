@@ -1,6 +1,7 @@
 """
-Dedicated Windows Setup Wizard for PrimeQC Master.
-Installs application files, creates Start Menu & Desktop shortcuts, registers context menus and uninstaller.
+PrimeQC Master - Modern Universal Windows Setup Installer.
+Single-window streamlined installation wizard with multi-language support,
+dependency self-extraction, desktop/start menu shortcut creation, and auto-launch.
 """
 
 import sys
@@ -9,79 +10,86 @@ import zipfile
 import shutil
 import subprocess
 from PySide6.QtWidgets import (
-    QApplication, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QFileDialog, QCheckBox, QProgressBar, QMessageBox, QFrame
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QLineEdit, QPushButton, QFileDialog, QCheckBox, QProgressBar, QMessageBox,
+    QFrame, QStackedWidget
 )
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QIcon, QFont, QPixmap
 
-DARK_INSTALLER_QSS = """
-QWizard {
-    background-color: #0b0f19;
-    color: #e2e8f0;
-    font-family: 'Segoe UI', sans-serif;
-    font-size: 13px;
+
+# Translations for Installer
+INSTALLER_TRANSLATIONS = {
+    "it": {
+        "title": "Installazione PrimeQC Master - Quality Control Amazon Prime Video",
+        "header_title": "PrimeQC Master v2.5",
+        "header_sub": "Installazione Suite Quality Control per Amazon Prime Video",
+        "dest_label": "Cartella di destinazione:",
+        "browse": "Sfoglia...",
+        "chk_desktop": "Crea icona sul Desktop",
+        "chk_start": "Crea collegamento nel Menu Start",
+        "btn_install": "🚀 INSTALLA ORA",
+        "btn_cancel": "Annulla",
+        "installing_title": "Installazione in corso...",
+        "installing_sub": "Estrazione delle librerie e configurazione dei motori di analisi...",
+        "complete_title": "🎉 Installazione Completata!",
+        "complete_sub": "PrimeQC Master è stato installato con successo sul tuo computer.",
+        "chk_launch": "Avvia PrimeQC Master adesso",
+        "btn_finish": "FINE / AVVIA",
+        "btn_close": "Chiudi",
+        "err_title": "Errore di Installazione",
+        "err_payload": "Archivio di installazione (payload.zip) non trovato nell'installer.",
+        "err_in_use": "PrimeQC.exe è attualmente aperto. Chiudilo e riprova."
+    },
+    "en": {
+        "title": "PrimeQC Master Setup - Amazon Prime Video Quality Control",
+        "header_title": "PrimeQC Master v2.5",
+        "header_sub": "Quality Control Suite Installation for Amazon Prime Video",
+        "dest_label": "Destination Folder:",
+        "browse": "Browse...",
+        "chk_desktop": "Create Desktop Shortcut",
+        "chk_start": "Create Start Menu Shortcut",
+        "btn_install": "🚀 INSTALL NOW",
+        "btn_cancel": "Cancel",
+        "installing_title": "Installing PrimeQC Master...",
+        "installing_sub": "Extracting application binaries, FFmpeg engines, and libraries...",
+        "complete_title": "🎉 Installation Complete!",
+        "complete_sub": "PrimeQC Master has been installed successfully on your computer.",
+        "chk_launch": "Launch PrimeQC Master now",
+        "btn_finish": "FINISH / LAUNCH",
+        "btn_close": "Close",
+        "err_title": "Installation Error",
+        "err_payload": "Installation payload archive (payload.zip) not found.",
+        "err_in_use": "PrimeQC.exe is currently running. Please close it and retry."
+    }
 }
-QWizardPage {
-    background-color: #0b0f19;
-}
-QPushButton {
-    background-color: #1e293b;
-    color: #f8fafc;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    padding: 6px 16px;
-    font-weight: 600;
-}
-QPushButton:hover {
-    background-color: #334155;
-}
-QPushButton:default {
-    background-color: #0284c7;
-    border-color: #0369a1;
-}
-QLineEdit {
-    background-color: #111827;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    padding: 6px 10px;
-    color: #f8fafc;
-}
-QProgressBar {
-    background-color: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 4px;
-    text-align: center;
-    color: #ffffff;
-    height: 18px;
-}
-QProgressBar::chunk {
-    background-color: #0284c7;
-}
-QCheckBox {
-    color: #cbd5e1;
-    font-weight: 500;
-}
-"""
+
+
+def get_t(key: str, lang: str = "it") -> str:
+    lang_dict = INSTALLER_TRANSLATIONS.get(lang, INSTALLER_TRANSLATIONS["it"])
+    return lang_dict.get(key, INSTALLER_TRANSLATIONS["en"].get(key, key))
 
 
 def create_windows_shortcut(target_exe: str, shortcut_path: str, icon_path: str = ""):
-    """Creates a Windows .lnk shortcut using PowerShell."""
+    """Creates a Windows .lnk shortcut using PowerShell COM object."""
     try:
-        ps_cmd = f"""
-        $WshShell = New-Object -ComObject WScript.Shell;
-        $Shortcut = $WshShell.CreateShortcut('{shortcut_path}');
-        $Shortcut.TargetPath = '{target_exe}';
-        $Shortcut.WorkingDirectory = '{os.path.dirname(target_exe)}';
-        if ('{icon_path}' -ne '') {{ $Shortcut.IconLocation = '{icon_path}'; }}
-        $Shortcut.Save();
-        """
-        subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True)
+        ps_cmd = (
+            f"$WshShell = New-Object -ComObject WScript.Shell; "
+            f"$Shortcut = $WshShell.CreateShortcut('{shortcut_path}'); "
+            f"$Shortcut.TargetPath = '{target_exe}'; "
+            f"$Shortcut.WorkingDirectory = '{os.path.dirname(target_exe)}'; "
+        )
+        if icon_path and os.path.isfile(icon_path):
+            ps_cmd += f"$Shortcut.IconLocation = '{icon_path}'; "
+        ps_cmd += "$Shortcut.Save();"
+
+        subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True, timeout=5)
     except Exception:
         pass
 
 
-class InstallWorker(QThread):
+class ExtractWorker(QThread):
+    """Background worker that extracts payload and creates system shortcuts."""
     sig_progress = Signal(int, str)
     sig_done = Signal(bool, str)
 
@@ -93,213 +101,340 @@ class InstallWorker(QThread):
 
     def run(self):
         try:
-            self.sig_progress.emit(10, "Preparing installation...")
+            self.sig_progress.emit(5, "Inizializzazione cartella...")
             os.makedirs(self.target_dir, exist_ok=True)
 
-            # Find payload zip
+            # Locate payload.zip in PyInstaller temp dir or adjacent
             base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
             payload_zip = os.path.join(base_dir, "payload.zip")
 
             if not os.path.isfile(payload_zip):
-                # Check fallback adjacent
                 payload_zip = os.path.join(os.path.dirname(os.path.abspath(__file__)), "payload.zip")
 
             if not os.path.isfile(payload_zip):
-                raise FileNotFoundError("Installation payload archive not found.")
+                raise FileNotFoundError("File 'payload.zip' non trovato nel pacchetto di installazione.")
 
-            self.sig_progress.emit(20, "Extracting application binaries and libraries...")
+            self.sig_progress.emit(15, "Estrazione file dell'applicazione...")
             with zipfile.ZipFile(payload_zip, 'r') as zf:
-                file_list = zf.namelist()
-                total = len(file_list)
-                for idx, item in enumerate(file_list):
-                    zf.extract(item, self.target_dir)
-                    pct = 20 + int((idx / max(1, total)) * 60)
-                    self.sig_progress.emit(pct, f"Installing: {os.path.basename(item)}")
+                members = zf.namelist()
+                total = len(members)
+                for idx, member in enumerate(members):
+                    zf.extract(member, self.target_dir)
+                    if idx % 10 == 0 or idx == total - 1:
+                        pct = 15 + int((idx / max(1, total)) * 70)
+                        self.sig_progress.emit(pct, f"Copia: {os.path.basename(member)}")
 
-            self.sig_progress.emit(85, "Creating system shortcuts...")
+            self.sig_progress.emit(90, "Configurazione collegamenti di sistema...")
             main_exe = os.path.join(self.target_dir, "PrimeQC.exe")
             icon_file = os.path.join(self.target_dir, "resources", "app_icon.ico")
 
             # 1. Desktop Shortcut
             if self.create_desktop:
                 desktop_dir = os.path.join(os.path.expanduser("~"), "Desktop")
-                shortcut_dest = os.path.join(desktop_dir, "PrimeQC Master.lnk")
-                create_windows_shortcut(main_exe, shortcut_dest, icon_file)
+                shortcut_path = os.path.join(desktop_dir, "PrimeQC Master.lnk")
+                create_windows_shortcut(main_exe, shortcut_path, icon_file)
 
             # 2. Start Menu Shortcut
             if self.create_start:
-                start_menu_dir = os.path.join(
+                start_dir = os.path.join(
                     os.getenv("APPDATA", ""),
                     "Microsoft", "Windows", "Start Menu", "Programs", "PrimeQC Master"
                 )
-                os.makedirs(start_menu_dir, exist_ok=True)
-                shortcut_dest = os.path.join(start_menu_dir, "PrimeQC Master.lnk")
-                create_windows_shortcut(main_exe, shortcut_dest, icon_file)
+                os.makedirs(start_dir, exist_ok=True)
+                shortcut_path = os.path.join(start_dir, "PrimeQC Master.lnk")
+                create_windows_shortcut(main_exe, shortcut_path, icon_file)
 
-            self.sig_progress.emit(100, "Installation complete!")
-            self.sig_done.emit(True, "Installation completed successfully.")
+            self.sig_progress.emit(100, "Installazione completata con successo!")
+            self.sig_done.emit(True, "OK")
         except Exception as e:
             self.sig_done.emit(False, str(e))
 
 
-class WelcomePage(QWizardPage):
+class ModernInstallerWindow(QMainWindow):
+    """Clean, high-reliability single-window installer."""
+
     def __init__(self):
         super().__init__()
-        self.setTitle("Welcome to PrimeQC Master Setup")
-        layout = QVBoxLayout(self)
+        self.lang = "it"
+        self.setWindowTitle(get_t("title", self.lang))
+        self.setFixedSize(620, 440)
+        self.worker = None
+
+        self._init_ui()
+        self._set_icon()
+
+    def _set_icon(self):
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        icon_path = os.path.join(base_dir, "resources", "app_icon.ico")
+        if os.path.isfile(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
+    def _init_ui(self):
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #0b0f19;
+            }
+            QLabel {
+                color: #f8fafc;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            QLineEdit {
+                background-color: #111827;
+                border: 1px solid #334155;
+                border-radius: 6px;
+                padding: 8px 12px;
+                color: #f8fafc;
+                font-size: 13px;
+            }
+            QPushButton {
+                background-color: #1e293b;
+                color: #f8fafc;
+                border: 1px solid #334155;
+                border-radius: 6px;
+                padding: 8px 18px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #334155;
+            }
+            QPushButton#PrimaryBtn {
+                background-color: #0284c7;
+                border: 1px solid #0369a1;
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton#PrimaryBtn:hover {
+                background-color: #0369a1;
+            }
+            QProgressBar {
+                background-color: #111827;
+                border: 1px solid #334155;
+                border-radius: 6px;
+                text-align: center;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: bold;
+                height: 24px;
+            }
+            QProgressBar::chunk {
+                background-color: #0284c7;
+                border-radius: 5px;
+            }
+            QCheckBox {
+                color: #cbd5e1;
+                font-size: 13px;
+                spacing: 8px;
+            }
+        """)
+
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(24, 20, 24, 20)
+        main_layout.setSpacing(16)
+
+        # Header Card
+        header_card = QFrame()
+        header_card.setStyleSheet("background-color: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 12px 16px;")
+        h_layout = QHBoxLayout(header_card)
+        h_layout.setContentsMargins(4, 4, 4, 4)
+
+        icon_lbl = QLabel("🛡️")
+        icon_lbl.setStyleSheet("font-size: 32px; background: transparent;")
+        h_layout.addWidget(icon_lbl)
+
+        txt_v = QVBoxLayout()
+        lbl_h_title = QLabel(f"<b>{get_t('header_title', self.lang)}</b>")
+        lbl_h_title.setStyleSheet("font-size: 17px; color: #38bdf8; background: transparent;")
+        lbl_h_sub = QLabel(get_t("header_sub", self.lang))
+        lbl_h_sub.setStyleSheet("font-size: 12px; color: #94a3b8; background: transparent;")
+        txt_v.addWidget(lbl_h_title)
+        txt_v.addWidget(lbl_h_sub)
+        h_layout.addLayout(txt_v, 1)
+
+        main_layout.addWidget(header_card)
+
+        # Stacked Pages
+        self.stack = QStackedWidget()
+
+        # Page 0: Options & Destination
+        self.page_options = self._build_page_options()
+        self.stack.addWidget(self.page_options)
+
+        # Page 1: Progress
+        self.page_progress = self._build_page_progress()
+        self.stack.addWidget(self.page_progress)
+
+        # Page 2: Finished
+        self.page_finished = self._build_page_finished()
+        self.stack.addWidget(self.page_finished)
+
+        main_layout.addWidget(self.stack, 1)
+
+    def _build_page_options(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(0, 8, 0, 0)
         layout.setSpacing(14)
 
-        lbl_desc = QLabel(
-            "<b>PrimeQC Master</b> is the broadcast-grade Quality Control Suite "
-            "engineered specifically for <b>Amazon Prime Video Distribution</b>.<br/><br/>"
-            "This wizard will install PrimeQC Master, its standalone analysis engine, "
-            "and all compliance profiles on your computer.<br/><br/>"
-            "Click <b>Next</b> to continue."
-        )
-        lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet("line-height: 1.5; color: #cbd5e1;")
-        layout.addWidget(lbl_desc)
-
-
-class DirectoryPage(QWizardPage):
-    def __init__(self):
-        super().__init__()
-        self.setTitle("Select Installation Folder")
-        self.setSubTitle("Choose the destination folder where PrimeQC Master will be installed.")
-        layout = QVBoxLayout(self)
-        layout.setSpacing(14)
-
+        # Destination Folder
+        layout.addWidget(QLabel(f"<b>{get_t('dest_label', self.lang)}</b>"))
+        dir_row = QHBoxLayout()
         self.default_dir = os.path.join(
             os.getenv("LOCALAPPDATA", os.path.expanduser("~")),
             "Programs", "PrimeQC Master"
         )
+        self.txt_dest = QLineEdit(self.default_dir)
+        self.btn_browse = QPushButton(get_t("browse", self.lang))
+        self.btn_browse.clicked.connect(self._browse_dir)
+        dir_row.addWidget(self.txt_dest, 1)
+        dir_row.addWidget(self.btn_browse)
+        layout.addLayout(dir_row)
 
-        dir_box = QHBoxLayout()
-        self.txt_dir = QLineEdit(self.default_dir)
-        self.btn_browse = QPushButton("Browse...")
-        self.btn_browse.clicked.connect(self._browse)
+        layout.addSpacing(6)
 
-        dir_box.addWidget(self.txt_dir, 1)
-        dir_box.addWidget(self.btn_browse)
-        layout.addLayout(dir_box)
-
-        # Options
-        layout.addWidget(QLabel("<b>Additional Shortcuts:</b>"))
-        self.chk_desktop = QCheckBox("Create a Desktop Shortcut")
+        # Checkboxes
+        self.chk_desktop = QCheckBox(get_t("chk_desktop", self.lang))
         self.chk_desktop.setChecked(True)
-        self.chk_start = QCheckBox("Create Start Menu Shortcut")
+        self.chk_start = QCheckBox(get_t("chk_start", self.lang))
         self.chk_start.setChecked(True)
-
         layout.addWidget(self.chk_desktop)
         layout.addWidget(self.chk_start)
 
-        self.registerField("install_dir*", self.txt_dir)
+        layout.addStretch()
 
-    def _browse(self):
-        d = QFileDialog.getExistingDirectory(self, "Select Install Folder", self.txt_dir.text())
+        # Bottom Buttons
+        btn_row = QHBoxLayout()
+        self.btn_cancel = QPushButton(get_t("btn_cancel", self.lang))
+        self.btn_cancel.clicked.connect(self.close)
+
+        self.btn_install = QPushButton(get_t("btn_install", self.lang))
+        self.btn_install.setObjectName("PrimaryBtn")
+        self.btn_install.setFixedHeight(42)
+        self.btn_install.clicked.connect(self._start_install)
+
+        btn_row.addWidget(self.btn_cancel)
+        btn_row.addStretch()
+        btn_row.addWidget(self.btn_install)
+        layout.addLayout(btn_row)
+
+        return w
+
+    def _build_page_progress(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(0, 20, 0, 0)
+        layout.setSpacing(16)
+
+        self.lbl_prog_title = QLabel(f"<h3>{get_t('installing_title', self.lang)}</h3>")
+        self.lbl_prog_title.setStyleSheet("color: #38bdf8;")
+        self.lbl_prog_sub = QLabel(get_t("installing_sub", self.lang))
+        self.lbl_prog_sub.setStyleSheet("color: #94a3b8; font-size: 12px;")
+
+        self.prog_bar = QProgressBar()
+        self.prog_bar.setRange(0, 100)
+        self.prog_bar.setValue(0)
+
+        self.lbl_prog_status = QLabel("Preparazione...")
+        self.lbl_prog_status.setStyleSheet("color: #cbd5e1; font-size: 11px;")
+
+        layout.addWidget(self.lbl_prog_title)
+        layout.addWidget(self.lbl_prog_sub)
+        layout.addWidget(self.prog_bar)
+        layout.addWidget(self.lbl_prog_status)
+        layout.addStretch()
+
+        return w
+
+    def _build_page_finished(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(0, 10, 0, 0)
+        layout.setSpacing(16)
+
+        card = QFrame()
+        card.setStyleSheet("background-color: #064e3b; border: 1px solid #059669; border-radius: 8px; padding: 18px;")
+        c_layout = QVBoxLayout(card)
+        c_layout.setSpacing(8)
+
+        lbl_f_title = QLabel(f"<b>{get_t('complete_title', self.lang)}</b>")
+        lbl_f_title.setStyleSheet("font-size: 16px; color: #34d399; background: transparent;")
+        lbl_f_sub = QLabel(get_t("complete_sub", self.lang))
+        lbl_f_sub.setStyleSheet("font-size: 13px; color: #e2e8f0; background: transparent; line-height: 1.4;")
+        lbl_f_sub.setWordWrap(True)
+
+        c_layout.addWidget(lbl_f_title)
+        c_layout.addWidget(lbl_f_sub)
+        layout.addWidget(card)
+
+        self.chk_launch = QCheckBox(get_t("chk_launch", self.lang))
+        self.chk_launch.setChecked(True)
+        layout.addWidget(self.chk_launch)
+
+        layout.addStretch()
+
+        btn_row = QHBoxLayout()
+        self.btn_finish = QPushButton(get_t("btn_finish", self.lang))
+        self.btn_finish.setObjectName("PrimaryBtn")
+        self.btn_finish.setFixedHeight(42)
+        self.btn_finish.clicked.connect(self._finish_and_exit)
+        btn_row.addStretch()
+        btn_row.addWidget(self.btn_finish)
+        layout.addLayout(btn_row)
+
+        return w
+
+    def _browse_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Seleziona cartella", self.txt_dest.text())
         if d:
-            self.txt_dir.setText(d)
+            self.txt_dest.setText(d)
 
+    def _start_install(self):
+        target_dir = self.txt_dest.text().strip()
+        if not target_dir:
+            QMessageBox.warning(self, "Attenzione", "Specificare una cartella di destinazione valida.")
+            return
 
-class ProgressPage(QWizardPage):
-    def __init__(self):
-        super().__init__()
-        self.setTitle("Installing PrimeQC Master")
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        create_desktop = self.chk_desktop.isChecked()
+        create_start = self.chk_start.isChecked()
 
-        self.lbl_status = QLabel("Installing files...")
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
+        self.stack.setCurrentIndex(1)
 
-        layout.addWidget(self.lbl_status)
-        layout.addWidget(self.progress_bar)
-
-        self.is_complete = False
-        self.worker = None
-
-    def initializePage(self):
-        install_dir = self.field("install_dir")
-        dir_page = self.wizard().page(1)
-        chk_desktop = dir_page.chk_desktop.isChecked()
-        chk_start = dir_page.chk_start.isChecked()
-
-        self.wizard().button(QWizard.NextButton).setEnabled(False)
-        self.wizard().button(QWizard.BackButton).setEnabled(False)
-
-        self.worker = InstallWorker(install_dir, chk_desktop, chk_start)
+        self.worker = ExtractWorker(target_dir, create_desktop, create_start)
         self.worker.sig_progress.connect(self._on_progress)
         self.worker.sig_done.connect(self._on_done)
         self.worker.start()
 
     def _on_progress(self, pct: int, msg: str):
-        self.progress_bar.setValue(pct)
-        self.lbl_status.setText(msg)
+        self.prog_bar.setValue(pct)
+        self.lbl_prog_status.setText(msg)
 
     def _on_done(self, success: bool, msg: str):
-        self.is_complete = success
         if success:
-            self.lbl_status.setText("✓ PrimeQC Master successfully installed!")
-            self.wizard().button(QWizard.NextButton).setEnabled(True)
-            self.completeChanged.emit()
-            self.wizard().next()
+            self.stack.setCurrentIndex(2)
         else:
-            QMessageBox.critical(self, "Installation Error", f"Installation failed: {msg}")
+            QMessageBox.critical(self, get_t("err_title", self.lang), f"Errore durante l'installazione:\n\n{msg}")
+            self.stack.setCurrentIndex(0)
 
-    def isComplete(self):
-        return self.is_complete
-
-
-class FinishedPage(QWizardPage):
-    def __init__(self):
-        super().__init__()
-        self.setTitle("Completing PrimeQC Master Setup")
-        layout = QVBoxLayout(self)
-        layout.setSpacing(14)
-
-        lbl = QLabel(
-            "<h3>Installation Complete!</h3>"
-            "PrimeQC Master has been installed on your computer.<br/><br/>"
-            "You can launch it anytime from your Desktop or Start Menu."
-        )
-        lbl.setWordWrap(True)
-        lbl.setStyleSheet("color: #38bdf8;")
-        layout.addWidget(lbl)
-
-        self.chk_launch = QCheckBox("Launch PrimeQC Master now")
-        self.chk_launch.setChecked(True)
-        layout.addWidget(self.chk_launch)
-
-
-class SetupWizard(QWizard):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("PrimeQC Master - Setup Wizard")
-        self.setWizardStyle(QWizard.ModernStyle)
-        self.setMinimumSize(600, 420)
-        self.setStyleSheet(DARK_INSTALLER_QSS)
-
-        self.addPage(WelcomePage())
-        self.addPage(DirectoryPage())
-        self.addPage(ProgressPage())
-        self.addPage(FinishedPage())
-
-    def accept(self):
-        # Check launch box
-        fin_page = self.page(3)
-        if fin_page.chk_launch.isChecked():
-            install_dir = self.field("install_dir")
-            exe_path = os.path.join(install_dir, "PrimeQC.exe")
+    def _finish_and_exit(self):
+        if self.chk_launch.isChecked():
+            target_dir = self.txt_dest.text().strip()
+            exe_path = os.path.join(target_dir, "PrimeQC.exe")
             if os.path.isfile(exe_path):
-                subprocess.Popen([exe_path], cwd=install_dir)
-        super().accept()
+                try:
+                    subprocess.Popen([exe_path], cwd=target_dir)
+                except Exception:
+                    pass
+        self.close()
 
 
 def main():
     app = QApplication(sys.argv)
-    wizard = SetupWizard()
-    wizard.show()
+    app.setApplicationName("PrimeQC Master Setup")
+    win = ModernInstallerWindow()
+    win.show()
     sys.exit(app.exec())
 
 
