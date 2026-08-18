@@ -366,10 +366,14 @@ class MainWindow(QMainWindow):
         if code:
             self._change_language(code)
 
-    def retranslate_ui(self, lang_code: str):
+    def retranslate_ui(self, lang_code: str = None):
         """Dynamically translates all UI elements when language changes."""
+        if not lang_code:
+            lang_code = self.i18n.get_current_language()
+
         self.setWindowTitle(_t("app_title"))
         self._build_menu_bar()
+
 
         # Update controls
         self.lbl_p.setText(f"<b>{_t('lbl_profile')}</b>")
@@ -458,8 +462,9 @@ class MainWindow(QMainWindow):
         # Update all UI views
         self.prime_report_view.update_report(report)
         self.issue_table.set_issues(report.issues)
-        self.loudness_view.update_loudness(report.loudness_data, report.issues)
+        self.loudness_view.update_loudness(report.loudness_data, report.phase_correlation_data)
         self.remediation_panel.set_report(report)
+
 
         if report.video_streams:
             fps = report.video_streams[0].fps

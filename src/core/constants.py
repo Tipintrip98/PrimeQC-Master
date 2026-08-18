@@ -21,6 +21,8 @@ class Severity(str, Enum):
     NOTICE = "NOTICE"
     WARNING = "WARNING"
     FAIL = "FAIL"
+    ERROR = "FAIL"
+
 
 
 class StreamType(str, Enum):

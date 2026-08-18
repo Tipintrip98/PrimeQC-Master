@@ -77,9 +77,25 @@ class RemediationPanelWidget(QFrame):
         """)
         layout.addWidget(self.txt_nle, 1)
 
+    def set_report(self, report: QCReportData):
+        """Sets active QC report and updates remediation instructions."""
+        if report:
+            self.update_remediation(report)
+        else:
+            self.clear()
+
+    def clear(self):
+        """Clears the remediation panel."""
+        self.current_report = None
+        self.txt_command.clear()
+        self.txt_nle.clear()
+
     def update_remediation(self, report: QCReportData):
         """Generates and updates conform scripts and NLE instructions."""
         self.current_report = report
+        if not report:
+            self.clear()
+            return
         cmd = RemediationEngine.generate_ffmpeg_fix_command(report)
         self.txt_command.setPlainText(cmd)
 
@@ -92,6 +108,7 @@ class RemediationPanelWidget(QFrame):
             nle_html += "<hr style='border: 0; border-top: 1px solid #1e293b;'>"
 
         self.txt_nle.setHtml(nle_html)
+
 
     def _copy_command(self):
         cmd = self.txt_command.toPlainText().strip()

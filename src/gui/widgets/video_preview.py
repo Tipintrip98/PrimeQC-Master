@@ -119,6 +119,11 @@ class VideoPreviewWidget(QFrame):
         except Exception:
             pass
 
+    def load_media(self, file_path: str, duration: float, fps: float = 24.0):
+        """Alias for load_video."""
+        self.load_video(file_path, duration, fps)
+
+
     def seek_seconds(self, sec: float):
         """Seeks to specific timestamp in seconds."""
         if not self.cap or self.duration_sec <= 0:

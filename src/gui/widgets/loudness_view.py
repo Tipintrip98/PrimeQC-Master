@@ -141,9 +141,18 @@ class LoudnessViewWidget(QFrame):
         bar.setFixedHeight(12)
         return bar
 
-    def update_loudness(self, loudness_data: dict, phase_data: dict):
+    def update_loudness(self, loudness_data: dict = None, phase_data: Any = None):
         """Updates meters with analysis data."""
-        if not loudness_data:
+        if not loudness_data or not isinstance(loudness_data, dict):
+            # Reset gauges
+            self.lbl_int_val.setText("-24.0 LUFS")
+            self.bar_int.setValue(40)
+            self.lbl_tp_val.setText("-2.00 dBTP")
+            self.bar_tp.setValue(90)
+            self.lbl_lra_val.setText("8.0 LU")
+            self.bar_lra.setValue(32)
+            self.phase_gauge.set_phase(0.85)
+            self.lbl_phase_val.setText("+0.85 (Mono Compatible)")
             return
 
         int_lufs = float(loudness_data.get("integrated", -24.0))
@@ -152,7 +161,6 @@ class LoudnessViewWidget(QFrame):
 
         # Update Integrated
         self.lbl_int_val.setText(f"{int_lufs:.1f} LUFS")
-        # Target is -24.0. Scale -40 to 0 -> 0 to 100
         int_pct = int(max(0, min(100, (int_lufs + 40) * 2.5)))
         self.bar_int.setValue(int_pct)
         if abs(int_lufs - (-24.0)) <= 1.0:
@@ -182,15 +190,23 @@ class LoudnessViewWidget(QFrame):
         self.bar_lra.setValue(lra_pct)
 
         # Update Phase
-        if phase_data:
+        if isinstance(phase_data, dict):
             mean_p = float(phase_data.get("mean_phase", 0.85))
-            self.phase_gauge.set_phase(mean_p)
-            if mean_p >= 0.2:
-                self.lbl_phase_val.setText(f"{mean_p:+.2f} (Mono Compatible)")
-                self.lbl_phase_val.setStyleSheet("color: #34d399; font-weight: bold;")
-            elif mean_p >= 0.0:
-                self.lbl_phase_val.setText(f"{mean_p:+.2f} (Wide Stereo)")
-                self.lbl_phase_val.setStyleSheet("color: #fbbf24; font-weight: bold;")
-            else:
-                self.lbl_phase_val.setText(f"{mean_p:+.2f} (Anti-Phase Risk)")
-                self.lbl_phase_val.setStyleSheet("color: #f87171; font-weight: bold;")
+        elif isinstance(phase_data, (int, float)):
+            mean_p = float(phase_data)
+        elif isinstance(phase_data, list) and len(phase_data) > 0 and isinstance(phase_data[0], dict):
+            mean_p = float(phase_data[0].get("mean_phase", 0.85))
+        else:
+            mean_p = 0.85
+
+        self.phase_gauge.set_phase(mean_p)
+        if mean_p >= 0.2:
+            self.lbl_phase_val.setText(f"{mean_p:+.2f} (Mono Compatible)")
+            self.lbl_phase_val.setStyleSheet("color: #34d399; font-weight: bold;")
+        elif mean_p >= 0.0:
+            self.lbl_phase_val.setText(f"{mean_p:+.2f} (Wide Stereo)")
+            self.lbl_phase_val.setStyleSheet("color: #fbbf24; font-weight: bold;")
+        else:
+            self.lbl_phase_val.setText(f"{mean_p:+.2f} (Anti-Phase Risk)")
+            self.lbl_phase_val.setStyleSheet("color: #f87171; font-weight: bold;")
+
