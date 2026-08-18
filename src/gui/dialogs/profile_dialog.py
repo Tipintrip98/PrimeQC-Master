@@ -14,10 +14,11 @@ from ...core.config import AppConfig
 class ProfileManagerDialog(QDialog):
     """Allows inspection and customization of Amazon Prime delivery standards."""
 
-    def __init__(self, config: AppConfig, parent=None):
+    def __init__(self, parent=None, config: Optional[AppConfig] = None):
         super().__init__(parent)
-        self.config = config
+        self.config = config or (parent.config_mgr if hasattr(parent, 'config_mgr') else AppConfig())
         self.setWindowTitle("Amazon Prime Delivery Profiles & Tolerances")
+
         self.setMinimumSize(600, 500)
         self.setStyleSheet("""
             QDialog {

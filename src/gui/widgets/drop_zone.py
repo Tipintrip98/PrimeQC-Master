@@ -1,5 +1,6 @@
 """
 Drag-and-Drop Ingestion Widget for Video and Subtitle files.
+Supports both drag & drop and manual file selection with status updates.
 """
 
 import os
@@ -13,6 +14,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent
 class DropZoneWidget(QFrame):
     """File ingestion area supporting drag and drop and file dialogs."""
     file_selected = Signal(str, str)  # (video_path, subtitle_path)
+    sig_file_selected = Signal(str)    # (video_path)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,8 +26,8 @@ class DropZoneWidget(QFrame):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
 
         # Drop Area Frame
         self.drop_box = QFrame()
@@ -34,54 +36,66 @@ class DropZoneWidget(QFrame):
                 border: 2px dashed #0284c7;
                 border-radius: 8px;
                 background-color: #0d1527;
-                min-height: 120px;
+                min-height: 48px;
+                padding: 6px;
             }
             QFrame:hover {
                 background-color: #13223f;
                 border-color: #38bdf8;
             }
         """)
-        drop_layout = QVBoxLayout(self.drop_box)
-        drop_layout.setAlignment(Qt.AlignCenter)
-        drop_layout.setSpacing(8)
+        drop_layout = QHBoxLayout(self.drop_box)
+        drop_layout.setContentsMargins(10, 4, 10, 4)
+        drop_layout.setSpacing(10)
 
         self.lbl_icon = QLabel("📥")
-        self.lbl_icon.setStyleSheet("font-size: 32px; background: transparent;")
-        self.lbl_icon.setAlignment(Qt.AlignCenter)
+        self.lbl_icon.setStyleSheet("font-size: 22px; background: transparent;")
 
-        self.lbl_prompt = QLabel("<b>DRAG & DROP MASTER VIDEO FILE HERE</b>")
-        self.lbl_prompt.setStyleSheet("font-size: 14px; color: #f8fafc; background: transparent;")
-        self.lbl_prompt.setAlignment(Qt.AlignCenter)
+        self.lbl_prompt = QLabel("<b>Trascina Master Video (.mov, .mp4, .mxf, .ts)</b>")
+        self.lbl_prompt.setStyleSheet("font-size: 12px; color: #f8fafc; background: transparent;")
 
-        self.lbl_formats = QLabel("Supported: Apple ProRes (.mov), H.264/HEVC (.mp4), MXF (IMF/OP1a), MPEG-2 (.ts)")
-        self.lbl_formats.setStyleSheet("font-size: 11px; color: #94a3b8; background: transparent;")
-        self.lbl_formats.setAlignment(Qt.AlignCenter)
+        self.btn_select_video = QPushButton("📂 Sfoglia...")
+        self.btn_select_video.setStyleSheet("background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 4px 10px; font-size: 11px;")
+        self.btn_select_video.clicked.connect(self._browse_video)
+
+        self.btn_select_sub = QPushButton("🔤 Sottotitoli...")
+        self.btn_select_sub.setStyleSheet("background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 4px 10px; font-size: 11px;")
+        self.btn_select_sub.clicked.connect(self._browse_subtitle)
+
+        self.lbl_selected_file = QLabel("Nessun file selezionato")
+        self.lbl_selected_file.setStyleSheet("color: #64748b; font-style: italic; font-size: 11px; background: transparent;")
 
         drop_layout.addWidget(self.lbl_icon)
         drop_layout.addWidget(self.lbl_prompt)
-        drop_layout.addWidget(self.lbl_formats)
+        drop_layout.addWidget(self.btn_select_video)
+        drop_layout.addWidget(self.btn_select_sub)
+        drop_layout.addWidget(self.lbl_selected_file, 1)
 
         layout.addWidget(self.drop_box)
 
-        # File Selection Actions Row
-        actions_row = QHBoxLayout()
-        actions_row.setSpacing(10)
+    def set_media_file(self, path: str):
+        """Sets active master video file."""
+        if path and os.path.isfile(path):
+            self.video_path = path
+            self._update_display()
 
-        self.btn_select_video = QPushButton("Browse Video Master...")
-        self.btn_select_video.setObjectName("PrimaryButton")
-        self.btn_select_video.clicked.connect(self._browse_video)
+    def set_subtitle_file(self, path: str):
+        """Sets sidecar subtitle file."""
+        if path and os.path.isfile(path):
+            self.subtitle_path = path
+            self._update_display()
 
-        self.btn_select_sub = QPushButton("Attach Subtitles (.srt, .vtt, .ttml)...")
-        self.btn_select_sub.clicked.connect(self._browse_subtitle)
+    def get_media_path(self) -> str:
+        return self.video_path
 
-        self.lbl_selected_file = QLabel("No file selected")
-        self.lbl_selected_file.setStyleSheet("color: #64748b; font-style: italic;")
+    def get_subtitle_path(self) -> str:
+        return self.subtitle_path
 
-        actions_row.addWidget(self.btn_select_video)
-        actions_row.addWidget(self.btn_select_sub)
-        actions_row.addWidget(self.lbl_selected_file, 1)
-
-        layout.addLayout(actions_row)
+    def clear(self):
+        self.video_path = ""
+        self.subtitle_path = ""
+        self.lbl_selected_file.setText("Nessun file selezionato")
+        self.lbl_selected_file.setStyleSheet("color: #64748b; font-style: italic; font-size: 11px; background: transparent;")
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -103,9 +117,9 @@ class DropZoneWidget(QFrame):
     def _browse_video(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Master Video for Amazon Prime QC",
+            "Seleziona Master Video per QC Amazon Prime",
             "",
-            "Video Files (*.mov *.mp4 *.mxf *.ts *.m2ts);;All Files (*.*)"
+            "Video Master (*.mov *.mp4 *.mxf *.ts *.m2ts *.mkv);;Tutti i File (*.*)"
         )
         if file_path:
             self.video_path = file_path
@@ -114,9 +128,9 @@ class DropZoneWidget(QFrame):
     def _browse_subtitle(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Subtitle / Timed Text Sidecar",
+            "Seleziona File Sottotitoli Sidecar",
             "",
-            "Subtitle Files (*.srt *.vtt *.ttml *.dfxp *.scc);;All Files (*.*)"
+            "Sottotitoli (*.srt *.vtt *.ttml *.dfxp *.scc);;Tutti i File (*.*)"
         )
         if file_path:
             self.subtitle_path = file_path
@@ -125,7 +139,8 @@ class DropZoneWidget(QFrame):
     def _update_display(self):
         if self.video_path:
             base = os.path.basename(self.video_path)
-            sub_text = f" + Sub: {os.path.basename(self.subtitle_path)}" if self.subtitle_path else ""
+            sub_text = f" + [Sub: {os.path.basename(self.subtitle_path)}]" if self.subtitle_path else ""
             self.lbl_selected_file.setText(f"✓ {base}{sub_text}")
-            self.lbl_selected_file.setStyleSheet("color: #38bdf8; font-weight: bold;")
+            self.lbl_selected_file.setStyleSheet("color: #38bdf8; font-weight: bold; font-size: 11px; background: transparent;")
             self.file_selected.emit(self.video_path, self.subtitle_path)
+            self.sig_file_selected.emit(self.video_path)

@@ -14,6 +14,8 @@ from ...engine.models import QCIssue
 class IssueTableWidget(QFrame):
     """Table showing itemized compliance issues and checkpoints."""
     issue_selected = Signal(object)  # QCIssue
+    sig_issue_selected = Signal(object)
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -150,3 +152,5 @@ class IssueTableWidget(QFrame):
             issue = self.table.item(selected_rows[0].row(), 0).data(Qt.UserRole)
             if issue:
                 self.issue_selected.emit(issue)
+                self.sig_issue_selected.emit(issue)
+

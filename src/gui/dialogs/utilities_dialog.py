@@ -9,10 +9,11 @@ Multi-tool Utility Suite for PrimeQC:
 import os
 import subprocess
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTabWidget,
+    QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTabWidget,
     QLineEdit, QFileDialog, QProgressBar, QFrame, QSpinBox, QDoubleSpinBox,
     QComboBox, QMessageBox, QGridLayout
 )
+
 from PySide6.QtCore import Qt, QThread, Signal
 from ...core.utils import get_binary_path, format_bytes, format_bitrate
 
