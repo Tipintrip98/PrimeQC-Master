@@ -40,6 +40,7 @@ class MediaProber:
         try:
             cmd = [
                 self.ffprobe_bin,
+                "-nostdin",
                 "-v", "quiet",
                 "-print_format", "json",
                 "-show_format",
@@ -49,18 +50,22 @@ class MediaProber:
                 file_path
             ]
             startupinfo = None
+            creationflags = 0
             if os.name == 'nt':
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                creationflags = 0x08000000
 
             proc = subprocess.run(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 encoding='utf-8',
                 errors='ignore',
                 startupinfo=startupinfo,
+                creationflags=creationflags,
                 timeout=30
             )
 
@@ -72,23 +77,28 @@ class MediaProber:
 
     def _probe_with_ffmpeg(self, file_path: str) -> Dict[str, Any]:
         """Fallback prober using ffmpeg -i stderr output."""
-        cmd = [self.ffmpeg_bin, "-i", file_path]
+        cmd = [self.ffmpeg_bin, "-nostdin", "-hide_banner", "-i", file_path]
         startupinfo = None
+        creationflags = 0
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            creationflags = 0x08000000
 
         proc = subprocess.run(
             cmd,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
             errors='ignore',
             startupinfo=startupinfo,
+            creationflags=creationflags,
             timeout=30
         )
         return self._parse_ffmpeg_stderr(file_path, proc.stderr)
+
 
     def _parse_probe_data(self, file_path: str, raw: Dict[str, Any]) -> Dict[str, Any]:
         """Processes raw ffprobe JSON into structured dictionary with StreamInfo models."""

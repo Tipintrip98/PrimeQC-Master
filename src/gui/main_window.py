@@ -443,10 +443,14 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText(f"Analyzing '{os.path.basename(media_path)}' ({profile_name})...")
         self.start_time = time.time()
 
+        if self.worker and self.worker.isRunning():
+            return
+
         self.worker = QCWorker(media_path, profile_name, subtitle_path)
         self.worker.sig_progress.connect(self._on_progress)
         self.worker.sig_done.connect(self._on_qc_done)
         self.worker.sig_error.connect(self._on_qc_error)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
 
     def _on_progress(self, pct: int, msg: str):
@@ -457,6 +461,7 @@ class MainWindow(QMainWindow):
         self.current_report = report
         self.btn_start.setEnabled(True)
         self.progress_bar.hide()
+        self.worker = None
         elapsed = time.time() - self.start_time
 
         # Update all UI views
@@ -464,7 +469,6 @@ class MainWindow(QMainWindow):
         self.issue_table.set_issues(report.issues)
         self.loudness_view.update_loudness(report.loudness_data, report.phase_correlation_data)
         self.remediation_panel.set_report(report)
-
 
         if report.video_streams:
             fps = report.video_streams[0].fps
@@ -479,6 +483,7 @@ class MainWindow(QMainWindow):
     def _on_qc_error(self, err_msg: str):
         self.btn_start.setEnabled(True)
         self.progress_bar.hide()
+        self.worker = None
         self.lbl_status.setText("Error during inspection.")
         QMessageBox.critical(self, "QC Error", f"An error occurred during inspection:\n\n{err_msg}")
 
@@ -493,9 +498,10 @@ class MainWindow(QMainWindow):
         self.drop_zone.clear()
         self.prime_report_view._show_empty_placeholder()
         self.issue_table.set_issues([])
-        self.loudness_view.update_loudness({}, [])
+        self.loudness_view.update_loudness({}, {})
         self.remediation_panel.set_report(None)
         self.lbl_status.setText(_t("status_ready"))
+
 
     def _open_export_dialog(self):
         if not self.current_report:

@@ -23,29 +23,15 @@ class AudioQCAnalyzer:
 
     def analyze(self, file_path: str, duration: float, fps: float = 24.0) -> Dict[str, Any]:
         """
-        Runs comprehensive audio quality analysis.
+        Runs comprehensive, high-speed audio quality analysis in a single pass.
         Returns:
             {
                 "loudness": {...},
                 "phase": {...},
                 "silences": [...],
-                "clipping": {...},
-                "issues": [...]
+                "issues": []
             }
         """
-        loudness_info = self._analyze_loudness(file_path)
-        phase_info = self._analyze_phase_correlation(file_path)
-        silence_info = self._analyze_silence(file_path, duration)
-        
-        return {
-            "loudness": loudness_info,
-            "phase": phase_info,
-            "silences": silence_info,
-            "issues": []
-        }
-
-    def _analyze_loudness(self, file_path: str) -> Dict[str, Any]:
-        """Executes ffmpeg with ebur128 filter to extract accurate ITU-R BS.1770-4 metrics."""
         loudness_result = {
             "integrated": -24.0,
             "true_peak": -2.0,
@@ -57,37 +43,58 @@ class AudioQCAnalyzer:
             "max_short_term": -19.0,
             "history": []
         }
+        phase_result = {
+            "mean_phase": 0.85,
+            "min_phase": 0.15,
+            "anti_phase_detected": False,
+            "dual_mono_detected": False
+        }
+        silences = []
 
         try:
-            # Run ebur128 filter
+            # Single-pass combined audio analysis filtergraph
             cmd = [
                 self.ffmpeg_bin,
                 "-nostdin",
                 "-hide_banner",
+                "-vn",
+                "-threads", "0",
                 "-i", file_path,
-                "-filter_complex", "ebur128=peak=true",
-                "-f", "null",
-                "-"
+                "-filter_complex",
+                "[0:a]asplit=3[a1][a2][a3];"
+                "[a1]ebur128=peak=true[o1];"
+                "[a2]aphasemeter=video=0,ametadata=print:key=lavfi.aphasemeter.phase[o2];"
+                "[a3]silencedetect=noise=-60dB:d=1.5[o3]",
+                "-map", "[o1]", "-f", "null", "-",
+                "-map", "[o2]", "-f", "null", "-",
+                "-map", "[o3]", "-f", "null", "-"
             ]
+
             startupinfo = None
+            creationflags = 0
             if os.name == 'nt':
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                creationflags = 0x08000000  # CREATE_NO_WINDOW
+
+            timeout_sec = max(60, int(duration * 1.5)) if duration > 0 else 180
 
             proc = subprocess.run(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 encoding='utf-8',
                 errors='ignore',
                 startupinfo=startupinfo,
-                timeout=180
+                creationflags=creationflags,
+                timeout=timeout_sec
             )
 
             stderr = proc.stderr
 
-            # Parse Integrated Loudness
+            # 1. Parse Integrated Loudness
             m_i = re.search(r"Integrated loudness:\s*I:\s*(-?\d+(?:\.\d+)?)\s*LUFS", stderr)
             if m_i:
                 loudness_result["integrated"] = float(m_i.group(1))
@@ -111,101 +118,26 @@ class AudioQCAnalyzer:
                 loudness_result["lra_high"] = float(m_lra_h.group(1))
 
             # Parse True Peak
-            # True peak: Peak: -1.2 dBFS (or per-channel)
             m_tp = re.search(r"True peak:\s*Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS", stderr)
             if m_tp:
                 loudness_result["true_peak"] = float(m_tp.group(1))
             else:
-                # Per-channel peaks
                 peaks = [float(p) for p in re.findall(r"True peak:\s*[\r\n\s]*[^\n]*?Peak:\s*(-?\d+(?:\.\d+)?)", stderr)]
                 if peaks:
                     loudness_result["true_peak"] = max(peaks)
 
-        except Exception:
-            pass
-
-        return loudness_result
-
-    def _analyze_phase_correlation(self, file_path: str) -> Dict[str, Any]:
-        """Calculates stereo phase correlation using aphasemeter filter."""
-        phase_result = {
-            "mean_phase": 0.85,
-            "min_phase": 0.15,
-            "anti_phase_detected": False,
-            "dual_mono_detected": False
-        }
-
-        try:
-            cmd = [
-                self.ffmpeg_bin,
-                "-nostdin",
-                "-hide_banner",
-                "-i", file_path,
-                "-filter_complex", "aphasemeter=video=0,ametadata=print:key=lavfi.aphasemeter.phase",
-                "-f", "null",
-                "-"
-            ]
-            startupinfo = None
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-            proc = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                errors='ignore',
-                startupinfo=startupinfo,
-                timeout=120
-            )
-
-            phases = [float(p) for p in re.findall(r"lavfi\.aphasemeter\.phase=(-?\d+(?:\.\d+)?)", proc.stderr)]
+            # 2. Parse Phase Correlation
+            phases = [float(p) for p in re.findall(r"lavfi\.aphasemeter\.phase=(-?\d+(?:\.\d+)?)", stderr)]
             if phases:
                 phase_result["mean_phase"] = sum(phases) / len(phases)
                 phase_result["min_phase"] = min(phases)
                 phase_result["anti_phase_detected"] = any(p < -0.2 for p in phases)
-                # Dual mono detection: phase is consistently 1.0 (exact duplicate channels)
                 if len(phases) > 20 and all(abs(p - 1.0) < 0.001 for p in phases[:100]):
                     phase_result["dual_mono_detected"] = True
 
-        except Exception:
-            pass
-
-        return phase_result
-
-    def _analyze_silence(self, file_path: str, total_duration: float) -> List[Dict[str, Any]]:
-        """Detects silent sections using silencedetect filter (threshold -60dB)."""
-        silences = []
-        try:
-            cmd = [
-                self.ffmpeg_bin,
-                "-nostdin",
-                "-hide_banner",
-                "-i", file_path,
-                "-af", "silencedetect=noise=-60dB:d=1.5",
-                "-f", "null",
-                "-"
-            ]
-            startupinfo = None
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-            proc = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                errors='ignore',
-                startupinfo=startupinfo,
-                timeout=120
-            )
-
-            starts = [float(s) for s in re.findall(r"silence_start:\s*(\d+(?:\.\d+)?)", proc.stderr)]
-            ends = [float(e) for e in re.findall(r"silence_end:\s*(\d+(?:\.\d+)?)", proc.stderr)]
+            # 3. Parse Silence
+            starts = [float(s) for s in re.findall(r"silence_start:\s*(\d+(?:\.\d+)?)", stderr)]
+            ends = [float(e) for e in re.findall(r"silence_end:\s*(\d+(?:\.\d+)?)", stderr)]
 
             for i in range(min(len(starts), len(ends))):
                 s_start = starts[i]
@@ -216,9 +148,16 @@ class AudioQCAnalyzer:
                     "end": s_end,
                     "duration": dur,
                     "is_start": s_start < 0.5,
-                    "is_tail": total_duration > 0 and (total_duration - s_end) < 1.0
+                    "is_tail": duration > 0 and (duration - s_end) < 1.0
                 })
+
         except Exception:
             pass
 
-        return silences
+        return {
+            "loudness": loudness_result,
+            "phase": phase_result,
+            "silences": silences,
+            "issues": []
+        }
+

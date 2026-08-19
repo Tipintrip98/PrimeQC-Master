@@ -138,14 +138,62 @@ class VideoPreviewWidget(QFrame):
         tc_str = seconds_to_timecode(sec, self.fps)
         self.lbl_current_tc.setText(tc_str)
 
-        # Seek in OpenCV
+        # Seek in OpenCV or fallback to FFmpeg
+        rendered = False
+        if self.cap:
+            try:
+                self.cap.set(cv2.CAP_PROP_POS_MSEC, sec * 1000.0)
+                ret, frame = self.cap.read()
+                if ret and frame is not None:
+                    self._render_frame(frame)
+                    rendered = True
+            except Exception:
+                pass
+
+        if not rendered and self.file_path and os.path.isfile(self.file_path):
+            self._extract_frame_ffmpeg(sec)
+
+    def _extract_frame_ffmpeg(self, sec: float):
+        """Extracts single preview frame via FFmpeg fallback."""
         try:
-            self.cap.set(cv2.CAP_PROP_POS_MSEC, sec * 1000.0)
-            ret, frame = self.cap.read()
-            if ret and frame is not None:
-                self._render_frame(frame)
+            from ...core.utils import get_binary_path
+            import subprocess
+            ffmpeg_bin = get_binary_path("ffmpeg")
+            cmd = [
+                ffmpeg_bin,
+                "-nostdin",
+                "-hide_banner",
+                "-ss", str(sec),
+                "-i", self.file_path,
+                "-vframes", "1",
+                "-f", "image2pipe",
+                "-vcodec", "png",
+                "-"
+            ]
+            startupinfo = None
+            creationflags = 0
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                creationflags = 0x08000000
+
+            proc = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                startupinfo=startupinfo,
+                creationflags=creationflags,
+                timeout=5
+            )
+            if proc.returncode == 0 and proc.stdout:
+                pix = QPixmap()
+                pix.loadFromData(proc.stdout)
+                scaled = pix.scaled(self.lbl_frame_canvas.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.lbl_frame_canvas.setPixmap(scaled)
         except Exception:
             pass
+
 
     def seek_timecode(self, tc: str):
         """Seeks to specific SMPTE timecode."""
