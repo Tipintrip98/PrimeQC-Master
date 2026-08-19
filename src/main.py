@@ -87,10 +87,12 @@ def run_gui(initial_file: str = None):
     from PySide6.QtWidgets import QApplication
     from PySide6.QtGui import QIcon
     from src.gui.main_window import MainWindow
+    from src.gui.theme import DARK_THEME_QSS
 
     app = QApplication(sys.argv)
     app.setApplicationName("PrimeQC Master")
     app.setOrganizationName("PrimeQC Studio")
+    app.setStyleSheet(DARK_THEME_QSS)
 
     # Set icon if exists
     icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app_icon.ico")

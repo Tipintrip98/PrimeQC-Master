@@ -22,6 +22,7 @@ from .widgets.loudness_view import LoudnessViewWidget
 from .widgets.video_preview import VideoPreviewWidget
 from .widgets.remediation_panel import RemediationPanelWidget
 from .widgets.prime_report_view import PrimeReportViewWidget
+from .theme import DARK_THEME_QSS
 
 from .dialogs.profile_dialog import ProfileManagerDialog
 from .dialogs.export_dialog import ExportReportDialog
@@ -50,20 +51,18 @@ class QCWorker(QThread):
         self.media_path = media_path
         self.profile_name = profile_name
         self.subtitle_path = subtitle_path
-        self.analyzer = None
 
     def run(self):
         try:
-            self.analyzer = PrimeQCAnalyzer()
-
-            def progress_hook(stage, pct, msg):
+            analyzer = PrimeQCAnalyzer(ConfigManager())
+            def prog_cb(stage: str, pct: int, msg: str):
                 self.sig_progress.emit(pct, f"[{stage}] {msg}")
 
-            report = self.analyzer.run_qc(
+            report = analyzer.run_qc(
                 file_path=self.media_path,
                 profile_name=self.profile_name,
                 sidecar_subtitle_path=self.subtitle_path,
-                progress_callback=progress_hook
+                progress_callback=prog_cb
             )
             self.sig_done.emit(report)
         except Exception as e:
@@ -83,8 +82,9 @@ class MainWindow(QMainWindow):
         self.start_time = 0
 
         self.setWindowTitle(self.i18n.translate("app_title"))
-        self.resize(1200, 800)
-        self.setMinimumSize(960, 640)
+        self.resize(1260, 840)
+        self.setMinimumSize(1020, 680)
+        self.setStyleSheet(DARK_THEME_QSS)
 
         self._build_menu_bar()
         self._init_ui()
@@ -220,33 +220,32 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(12, 8, 12, 8)
+        main_layout.setContentsMargins(14, 10, 14, 10)
         main_layout.setSpacing(10)
 
-        # --- Top Ingest Bar ---
-        top_card = QFrame()
-        top_card.setStyleSheet("background-color: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 6px 10px;")
-        top_layout = QHBoxLayout(top_card)
-        top_layout.setContentsMargins(4, 4, 4, 4)
-        top_layout.setSpacing(10)
+        # --- Top Header Frame ---
+        header_card = QFrame()
+        header_card.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0f172a, stop:1 #080c14);
+                border: 1px solid #1e293b;
+                border-radius: 8px;
+                padding: 6px 14px;
+            }
+        """)
+        header_layout = QHBoxLayout(header_card)
+        header_layout.setContentsMargins(6, 4, 6, 4)
+        header_layout.setSpacing(14)
 
-        # Language Quick Selector
-        self.cb_lang = QComboBox()
-        for code, info in LANGUAGES.items():
-            self.cb_lang.addItem(f"{info['flag']} {info['name']}", code)
-        
-        # Set active lang index
-        cur_idx = list(LANGUAGES.keys()).index(self.i18n.get_current_language())
-        self.cb_lang.setCurrentIndex(cur_idx)
-        self.cb_lang.currentIndexChanged.connect(self._on_combo_lang_changed)
-        self.cb_lang.setFixedWidth(130)
-        self.cb_lang.setStyleSheet("background-color: #0d1527; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 4px;")
-        top_layout.addWidget(self.cb_lang)
+        # Branding
+        lbl_brand = QLabel("<b style='font-size: 16px; color: #ffffff;'>PRIMEQC</b> <span style='font-size: 16px; font-weight: 900; color: #00a8e8;'>MASTER</span> <span style='background: #064e3b; color: #34d399; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px;'>PRIME VIDEO DIRECT</span>")
+        header_layout.addWidget(lbl_brand)
+        header_layout.addStretch()
 
-        # Profile Selector
-        self.lbl_p = QLabel(f"<b>{_t('lbl_profile')}</b>")
+        # Profile Selector Pill
+        self.lbl_p = QLabel(f"<b>{_t('lbl_profile')}:</b>")
         self.lbl_p.setStyleSheet("color: #94a3b8; font-size: 11px;")
-        top_layout.addWidget(self.lbl_p)
+        header_layout.addWidget(self.lbl_p)
 
         self.cb_profiles = QComboBox()
         self.cb_profiles.addItems([
@@ -256,98 +255,110 @@ class MainWindow(QMainWindow):
             ProfileType.STUDIOS_HDR.value,
             ProfileType.TRAILER.value
         ])
-        self.cb_profiles.setMinimumWidth(240)
+        self.cb_profiles.setMinimumWidth(230)
         self.cb_profiles.currentTextChanged.connect(self._on_combo_profile_changed)
-        top_layout.addWidget(self.cb_profiles)
+        header_layout.addWidget(self.cb_profiles)
 
-        top_layout.addSpacing(10)
+        # Language Quick Selector
+        self.cb_lang = QComboBox()
+        for code, info in LANGUAGES.items():
+            self.cb_lang.addItem(f"{info['flag']} {info['name']}", code)
+        
+        cur_idx = list(LANGUAGES.keys()).index(self.i18n.get_current_language())
+        self.cb_lang.setCurrentIndex(cur_idx)
+        self.cb_lang.currentIndexChanged.connect(self._on_combo_lang_changed)
+        self.cb_lang.setFixedWidth(130)
+        header_layout.addWidget(self.cb_lang)
 
-        # Compact Ingestion Zone
+        # Quick Export Buttons
+        btn_quick_pdf = QPushButton("📄 PDF")
+        btn_quick_pdf.setToolTip("Quick Export PDF Certificate")
+        btn_quick_pdf.clicked.connect(self._quick_export_pdf)
+        header_layout.addWidget(btn_quick_pdf)
+
+        main_layout.addWidget(header_card)
+
+        # --- Ingestion & Start QC Bar ---
+        ingest_card = QFrame()
+        ingest_card.setStyleSheet("""
+            QFrame {
+                background-color: #0c121e;
+                border: 1px solid #1e293b;
+                border-radius: 8px;
+                padding: 6px;
+            }
+        """)
+        ingest_layout = QHBoxLayout(ingest_card)
+        ingest_layout.setContentsMargins(6, 4, 6, 4)
+        ingest_layout.setSpacing(10)
+
+        # Drop Zone (Takes majority of width)
         self.drop_zone = DropZoneWidget()
         self.drop_zone.sig_file_selected.connect(self._on_file_selected)
-        top_layout.addWidget(self.drop_zone, 1)
+        ingest_layout.addWidget(self.drop_zone, 1)
 
-        # Start QC Button
+        # START QC Action Button
         self.btn_start = QPushButton(_t("btn_start_qc"))
         self.btn_start.setObjectName("PrimaryButton")
-        self.btn_start.setFixedHeight(44)
-        self.btn_start.setMinimumWidth(190)
+        self.btn_start.setFixedHeight(48)
+        self.btn_start.setMinimumWidth(210)
         self.btn_start.setStyleSheet("""
             QPushButton#PrimaryButton {
-                background-color: #0284c7;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0284c7, stop:1 #0369a1);
                 color: #ffffff;
-                font-weight: bold;
+                font-weight: 800;
                 font-size: 13px;
+                border: 1px solid #38bdf8;
                 border-radius: 6px;
                 letter-spacing: 0.5px;
             }
             QPushButton#PrimaryButton:hover {
-                background-color: #0369a1;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #38bdf8, stop:1 #0284c7);
+                border-color: #ffffff;
             }
             QPushButton#PrimaryButton:disabled {
-                background-color: #334155;
-                color: #64748b;
+                background: #1e293b;
+                color: #475569;
+                border: 1px solid #1e293b;
             }
         """)
         self.btn_start.clicked.connect(self._start_qc)
-        top_layout.addWidget(self.btn_start)
+        ingest_layout.addWidget(self.btn_start)
 
-        main_layout.addWidget(top_card)
+        main_layout.addWidget(ingest_card)
 
         # --- Progress Bar ---
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setFixedHeight(5)
         self.progress_bar.setTextVisible(False)
         self.progress_bar.hide()
         main_layout.addWidget(self.progress_bar)
 
         # --- Main Tabbed Content Area ---
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #1f2937;
-                background-color: #0d1527;
-                border-radius: 6px;
-            }
-            QTabBar::tab {
-                background-color: #0b0f19;
-                color: #94a3b8;
-                padding: 8px 18px;
-                font-weight: 600;
-                font-size: 12px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background-color: #0d1527;
-                color: #38bdf8;
-                border-bottom: 2px solid #38bdf8;
-            }
-        """)
 
         # Tab 1: Amazon Prime Styled QC Report (Primary View)
         self.prime_report_view = PrimeReportViewWidget()
-        self.tabs.addTab(self.prime_report_view, _t("tab_prime_report"))
+        self.tabs.addTab(self.prime_report_view, f"📊 {_t('tab_prime_report')}")
 
         # Tab 2: Full Checkpoints Table
         self.issue_table = IssueTableWidget()
         self.issue_table.sig_issue_selected.connect(self._on_issue_selected)
-        self.tabs.addTab(self.issue_table, _t("tab_checkpoints"))
+        self.tabs.addTab(self.issue_table, f"📋 {_t('tab_checkpoints')}")
 
         # Tab 3: Audio Studio & Loudness Radar
         self.loudness_view = LoudnessViewWidget()
-        self.tabs.addTab(self.loudness_view, _t("tab_audio_studio"))
+        self.tabs.addTab(self.loudness_view, f"🔊 {_t('tab_audio_studio')}")
 
         # Tab 4: Frame Inspector Player
         self.video_preview = VideoPreviewWidget()
-        self.tabs.addTab(self.video_preview, _t("tab_frame_inspector"))
+        self.tabs.addTab(self.video_preview, f"👁️ {_t('tab_frame_inspector')}")
 
         # Tab 5: Remediation
         self.remediation_panel = RemediationPanelWidget()
-        self.tabs.addTab(self.remediation_panel, _t("tab_remediation"))
+        self.tabs.addTab(self.remediation_panel, f"🛠️ {_t('tab_remediation')}")
 
         main_layout.addWidget(self.tabs, 1)
 
